@@ -69,6 +69,10 @@ export default function VideoEditor() {
   const videoRef    = useRef<HTMLVideoElement>(null);
   const videoWrapRef = useRef<HTMLDivElement>(null);
   const audioRef    = useRef<HTMLAudioElement>(null);
+  // Web Audio API nodes for BGM fade
+  const audioCtxRef  = useRef<AudioContext | null>(null);
+  const audioSrcRef  = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainNodeRef  = useRef<GainNode | null>(null);
   // Ref mirrors isPlaying to avoid stale closures in effects
   const isPlayingRef = useRef(false);
   // Guard against multiple concurrent clip-advance calls
@@ -166,7 +170,7 @@ export default function VideoEditor() {
     } else {
       setIsPlaying(false);
       isPlayingRef.current = false;
-      audioRef.current?.pause();
+      stopBGMWithFade();
       // Reset to first clip — use a sentinel to force effect to re-run
       setCurrentClipIndex(-1);
       requestAnimationFrame(() => setCurrentClipIndex(0));
@@ -189,16 +193,67 @@ export default function VideoEditor() {
     }
   }, [playingClip, currentClipIndex, sortedClips.length, advanceClip]);
 
+  const ensureAudioGraph = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !bgmUrl) return null;
+    if (!audioCtxRef.current) {
+      const ctx = new AudioContext();
+      const src = ctx.createMediaElementSource(audio);
+      const gain = ctx.createGain();
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      audioSrcRef.current = src;
+      gainNodeRef.current = gain;
+    }
+    return gainNodeRef.current;
+  }, [bgmUrl]);
+
+  const playBGMWithFade = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !bgmUrl) return;
+    const gain = ensureAudioGraph();
+    if (!gain) return;
+    const ctx = audioCtxRef.current!;
+    const targetVolume = project.bgm?.volume ?? 0.5;
+    const fadeIn = project.bgm?.fadeInDuration ?? 0;
+    if (ctx.state === 'suspended') ctx.resume();
+    gain.gain.cancelScheduledValues(ctx.currentTime);
+    if (fadeIn > 0) {
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(targetVolume, ctx.currentTime + fadeIn);
+    } else {
+      gain.gain.setValueAtTime(targetVolume, ctx.currentTime);
+    }
+    audio.play().catch(() => {});
+  }, [bgmUrl, ensureAudioGraph, project.bgm?.volume, project.bgm?.fadeInDuration]);
+
+  const stopBGMWithFade = useCallback((immediate = false) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const gain = gainNodeRef.current;
+    const ctx  = audioCtxRef.current;
+    const fadeOut = project.bgm?.fadeOutDuration ?? 0;
+    if (!immediate && gain && ctx && fadeOut > 0) {
+      gain.gain.cancelScheduledValues(ctx.currentTime);
+      gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + fadeOut);
+      setTimeout(() => audio.pause(), fadeOut * 1000);
+    } else {
+      audio.pause();
+    }
+  }, [project.bgm?.fadeOutDuration]);
+
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
     if (isPlaying) {
       video.pause();
-      audioRef.current?.pause();
+      stopBGMWithFade();
       setIsPlaying(false);
     } else {
       video.play().catch(() => {});
-      if (bgmUrl) audioRef.current?.play().catch(() => {});
+      if (bgmUrl) playBGMWithFade();
       setIsPlaying(true);
     }
   };
@@ -387,9 +442,10 @@ export default function VideoEditor() {
 
   const updateBGM = (patch: Partial<BGMTrack>) => {
     updateProject(p => ({ ...p, bgm: p.bgm ? { ...p.bgm, ...patch } : null }));
-    if (audioRef.current) {
-      if (patch.volume !== undefined) audioRef.current.volume = patch.volume;
-      if (patch.loop !== undefined) audioRef.current.loop = patch.loop;
+    if (audioRef.current && patch.loop !== undefined) audioRef.current.loop = patch.loop;
+    // Live-update gain if not fading
+    if (gainNodeRef.current && audioCtxRef.current && patch.volume !== undefined && isPlaying) {
+      gainNodeRef.current.gain.setValueAtTime(patch.volume, audioCtxRef.current.currentTime);
     }
   };
 
@@ -856,9 +912,13 @@ export default function VideoEditor() {
                   ループ再生
                 </label>
                 <button className="btn-danger-sm" onClick={() => {
+                  stopBGMWithFade(true);
                   if (bgmUrl) URL.revokeObjectURL(bgmUrl);
                   setBgmUrl(null);
-                  audioRef.current?.pause();
+                  audioCtxRef.current?.close();
+                  audioCtxRef.current = null;
+                  audioSrcRef.current = null;
+                  gainNodeRef.current = null;
                   updateProject(p => ({ ...p, bgm: null }));
                 }}>
                   BGMを削除
