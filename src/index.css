@@ -1214,3 +1214,173 @@ button:active {
   transition: background 0.15s;
 }
 .btn-danger-sm:hover { background: rgba(248, 113, 113, 0.1); }
+
+/* ── Timeline ── */
+.tl-wrap {
+  display: flex;
+  flex-direction: row-reverse;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow: hidden;
+  max-height: 120px;
+}
+
+.tl-labels {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 44px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+.tl-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.tl-label-ruler { height: 18px; }
+
+.tl-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tl-inner {
+  position: relative;
+  min-height: 80px;
+}
+
+/* Ruler */
+.tl-ruler {
+  height: 18px;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  padding-left: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.tl-tick span {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Tracks */
+.tl-track {
+  position: relative;
+  height: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-track-telops { height: 20px; }
+.tl-track-bgm    { height: 16px; }
+
+/* Clip block */
+.tl-clip {
+  position: absolute;
+  top: 2px;
+  height: 20px;
+  background: var(--accent);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  border: 1px solid transparent;
+}
+.tl-clip.selected { border-color: #fff; }
+.tl-clip.playing  { opacity: 0.85; box-shadow: 0 0 0 2px var(--accent-hover); }
+
+/* Image block */
+.tl-image {
+  position: absolute;
+  top: 2px;
+  height: 20px;
+  background: var(--accent2);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Telop block */
+.tl-telop {
+  position: absolute;
+  top: 2px;
+  height: 16px;
+  background: rgba(251, 191, 36, 0.7);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* BGM bar */
+.tl-bgm-bar {
+  position: absolute;
+  top: 4px;
+  height: 8px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(124,92,252,0.4) 0px,
+    rgba(124,92,252,0.4) 6px,
+    transparent 6px,
+    transparent 10px
+  );
+  border-radius: 4px;
+}
+
+.tl-clip-label {
+  font-size: 9px;
+  color: #fff;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.tl-speed-badge {
+  font-size: 8px;
+  color: rgba(255,255,255,0.8);
+  background: rgba(0,0,0,0.3);
+  border-radius: 3px;
+  padding: 0 3px;
+  flex-shrink: 0;
+}
+
+/* Playhead */
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  pointer-events: none;
+  z-index: 10;
+}
+.tl-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  border: 5px solid transparent;
+  border-top-color: var(--danger);
+}

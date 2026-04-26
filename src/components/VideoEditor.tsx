@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical } from 'lucide-react';
 import type { VideoClipData, Telop, ImageInsert, BGMTrack, VideoProject, TelopStyle } from '../types';
 import { generateId } from '../defaults';
+import VideoTimeline from './VideoTimeline';
 
 const DEFAULT_TELOP_STYLE: TelopStyle = {
   fontSize: 20,
@@ -406,6 +407,17 @@ export default function VideoEditor() {
 
         <audio ref={audioRef} />
       </div>
+
+      {/* Timeline */}
+      <VideoTimeline
+        sortedClips={sortedClips}
+        imageInserts={project.imageInserts}
+        telops={project.telops}
+        currentClipIndex={currentClipIndex}
+        currentTime={currentTime}
+        selectedClipId={selectedClipId}
+        onClipClick={id => { setSelectedClipId(id); setActivePanel('clips'); }}
+      />
 
       {/* Panel tabs */}
       <div className="ve-panel-tabs">
