@@ -1,8 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical } from 'lucide-react';
+import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical, FolderOpen, Save, FilePlus } from 'lucide-react';
 import type { VideoClipData, Telop, ImageInsert, BGMTrack, VideoProject, TelopStyle } from '../types';
 import { generateId } from '../defaults';
 import VideoTimeline from './VideoTimeline';
+
+const STORAGE_KEY = 'ans_video_projects';
+
+function loadAllProjects(): VideoProject[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveAllProjects(projects: VideoProject[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(projects)); } catch { /* quota */ }
+}
 
 const DEFAULT_TELOP_STYLE: TelopStyle = {
   fontSize: 20,
@@ -44,6 +57,10 @@ export default function VideoEditor() {
   const [activePanel, setActivePanel] = useState<'clips' | 'telops' | 'images' | 'bgm' | 'speed'>('clips');
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [dragOverClipId, setDragOverClipId] = useState<string | null>(null);
+  const [showProjectSheet, setShowProjectSheet] = useState(false);
+  const [savedProjects, setSavedProjects] = useState<VideoProject[]>(loadAllProjects);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentClipIndex, setCurrentClipIndex] = useState(0);
@@ -63,6 +80,26 @@ export default function VideoEditor() {
 
   // Keep ref in sync with state
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // Auto-save project metadata (debounced 1.5s)
+  useEffect(() => {
+    setSaveStatus('unsaved');
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      setSaveStatus('saving');
+      setSavedProjects(prev => {
+        const idx = prev.findIndex(p => p.id === project.id);
+        const next = idx >= 0
+          ? prev.map((p, i) => i === idx ? project : p)
+          : [...prev, project];
+        saveAllProjects(next);
+        return next;
+      });
+      setSaveStatus('saved');
+    }, 1500);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   // Revoke all object URLs on unmount
   useEffect(() => {
@@ -374,7 +411,65 @@ export default function VideoEditor() {
     updateProject(p => ({ ...p, imageInserts: p.imageInserts.filter(img => img.id !== id) }));
   };
 
-  // Playing: only telops whose time range is active. Paused: all clip telops (for dragging)
+  // ── Project management ──
+
+  const handleNewProject = () => {
+    if (!confirm('現在のプロジェクトを閉じて新規作成しますか？')) return;
+    clipUrls.forEach(url => URL.revokeObjectURL(url));
+    imageUrls.forEach(url => URL.revokeObjectURL(url));
+    if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+    setClipUrls(new Map());
+    setImageUrls(new Map());
+    setBgmUrl(null);
+    setProject(newProject());
+    setSelectedClipId(null);
+    setCurrentClipIndex(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
+    setShowProjectSheet(false);
+  };
+
+  const handleLoadProject = (p: VideoProject) => {
+    clipUrls.forEach(url => URL.revokeObjectURL(url));
+    imageUrls.forEach(url => URL.revokeObjectURL(url));
+    if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+    setClipUrls(new Map());
+    setImageUrls(new Map());
+    setBgmUrl(null);
+    setProject(p);
+    setSelectedClipId(null);
+    setCurrentClipIndex(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
+    setShowProjectSheet(false);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    if (!confirm('このプロジェクトを削除しますか？')) return;
+    setSavedProjects(prev => {
+      const next = prev.filter(p => p.id !== id);
+      saveAllProjects(next);
+      return next;
+    });
+    if (project.id === id) handleNewProject();
+  };
+
+  // ── File re-upload for loaded project ──
+
+  const handleReUploadClip = async (e: React.ChangeEvent<HTMLInputElement>, clipId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setClipUrls(prev => new Map([...prev, [clipId, url]]));
+    const duration = await getVideoDuration(file);
+    updateProject(p => ({
+      ...p,
+      clips: p.clips.map(c => c.id === clipId ? { ...c, name: file.name, duration } : c),
+    }));
+    e.target.value = '';
+  };
+
+  // ── Playing: only telops whose time range is active. Paused: all clip telops (for dragging)
   const overlayTelops = playingClip
     ? isPlaying
       ? project.telops.filter(t => t.clipId === playingClip.id && currentTime >= t.startTime && currentTime <= t.endTime)
@@ -385,12 +480,59 @@ export default function VideoEditor() {
     <div className="video-editor">
       <div className="page-header">
         <h1 className="page-title">動画編集</h1>
-        <input
-          className="project-name-input"
-          value={project.name}
-          onChange={e => updateProject(p => ({ ...p, name: e.target.value }))}
-        />
+        <div className="ve-header-right">
+          <input
+            className="project-name-input"
+            value={project.name}
+            onChange={e => updateProject(p => ({ ...p, name: e.target.value }))}
+          />
+          <span className={`ve-save-status ${saveStatus}`}>
+            {saveStatus === 'saved' ? '保存済' : saveStatus === 'saving' ? '保存中…' : '未保存'}
+          </span>
+          <button className="ve-icon-btn" onClick={() => setShowProjectSheet(true)} title="プロジェクト一覧">
+            <FolderOpen size={18} />
+          </button>
+          <button className="ve-icon-btn" onClick={handleNewProject} title="新規プロジェクト">
+            <FilePlus size={18} />
+          </button>
+        </div>
       </div>
+
+      {/* Project sheet */}
+      {showProjectSheet && (
+        <div className="modal-overlay" onClick={() => setShowProjectSheet(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <div className="modal-header">
+              <span className="modal-title">プロジェクト一覧</span>
+              <button className="modal-close" onClick={() => setShowProjectSheet(false)}>✕</button>
+            </div>
+            <div className="ve-project-list">
+              {savedProjects.length === 0 && (
+                <p className="ve-hint">保存済みプロジェクトがありません</p>
+              )}
+              {savedProjects.map(p => (
+                <div key={p.id} className={`ve-project-row${p.id === project.id ? ' active' : ''}`}>
+                  <div className="ve-project-info" onClick={() => handleLoadProject(p)}>
+                    <p className="ve-clip-name">{p.name}</p>
+                    <p className="ve-clip-meta">
+                      {p.clips.length}クリップ · {new Date(p.updatedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <button className="btn-icon-sm btn-danger" onClick={() => handleDeleteProject(p.id)}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 16px' }}>
+              <button className="btn-primary" onClick={handleNewProject}>
+                <FilePlus size={16} /> 新規プロジェクト
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Preview */}
       <div className="ve-preview">
@@ -514,8 +656,13 @@ export default function VideoEditor() {
                 <div className="ve-drag-handle">
                   <GripVertical size={14} />
                 </div>
-                <div className="ve-clip-thumb">
-                  <Play size={16} />
+                <div className={`ve-clip-thumb${!clipUrls.has(clip.id) ? ' missing' : ''}`}>
+                  {clipUrls.has(clip.id) ? <Play size={16} /> : (
+                    <label title="ファイルを再アップロード" style={{ cursor: 'pointer' }} onClick={e => e.stopPropagation()}>
+                      <Upload size={14} />
+                      <input type="file" accept="video/*" hidden onChange={e => handleReUploadClip(e, clip.id)} />
+                    </label>
+                  )}
                 </div>
                 <div className="ve-clip-info">
                   <p className="ve-clip-name">{clip.name}</p>
