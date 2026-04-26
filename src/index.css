@@ -1491,3 +1491,161 @@ button:active {
   background: rgba(248,113,113,0.12);
   color: var(--danger);
 }
+
+/* ── Export button ── */
+.ve-export-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ve-export-btn:hover  { background: var(--accent-hover); }
+.ve-export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── ExportModal ── */
+.ex-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.ex-feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.ex-notes {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ex-notes p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ex-warning {
+  background: rgba(251,191,36,0.1);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--warning);
+  line-height: 1.5;
+}
+
+/* Steps */
+.ex-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+.ex-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ex-step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.ex-step-dot.active { border-color: var(--accent); color: var(--accent); }
+.ex-step-dot.done   { border-color: var(--success); background: var(--success); color: #fff; }
+
+.ex-step-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.ex-step-line {
+  width: 32px;
+  height: 2px;
+  background: var(--border);
+  margin-bottom: 16px;
+}
+
+/* Progress bar */
+.ex-bar-track {
+  height: 8px;
+  background: var(--bg-card);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ex-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.ex-pct {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+}
+.ex-phase {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.ex-warn-small {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.ex-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Result */
+.ex-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.ex-result-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.ex-result-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.ex-error-msg {
+  font-size: 13px;
+  color: var(--danger);
+  text-align: center;
+  word-break: break-all;
+}
+
+/* Spin animation for loader */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }

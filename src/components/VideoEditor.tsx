@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical, FolderOpen, Save, FilePlus } from 'lucide-react';
+import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical, FolderOpen, FilePlus, Download } from 'lucide-react';
 import type { VideoClipData, Telop, ImageInsert, BGMTrack, VideoProject, TelopStyle } from '../types';
 import { generateId } from '../defaults';
 import VideoTimeline from './VideoTimeline';
+import ExportModal from './ExportModal';
+import { useVideoExport } from '../hooks/useVideoExport';
 
 const STORAGE_KEY = 'ans_video_projects';
 
@@ -58,9 +60,12 @@ export default function VideoEditor() {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [dragOverClipId, setDragOverClipId] = useState<string | null>(null);
   const [showProjectSheet, setShowProjectSheet] = useState(false);
+  const [showExportModal,  setShowExportModal]  = useState(false);
   const [savedProjects, setSavedProjects] = useState<VideoProject[]>(loadAllProjects);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const exportHook = useVideoExport(clipUrls, imageUrls, bgmUrl);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentClipIndex, setCurrentClipIndex] = useState(0);
@@ -551,6 +556,14 @@ export default function VideoEditor() {
           <button className="ve-icon-btn" onClick={handleNewProject} title="新規プロジェクト">
             <FilePlus size={18} />
           </button>
+          <button
+            className="ve-icon-btn ve-export-btn"
+            onClick={() => { exportHook.reset(); setShowExportModal(true); }}
+            title="MP4書き出し"
+            disabled={sortedClips.length === 0}
+          >
+            <Download size={18} />
+          </button>
         </div>
       </div>
 
@@ -588,6 +601,25 @@ export default function VideoEditor() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Export modal */}
+      {showExportModal && (
+        <ExportModal
+          status={exportHook.status}
+          progress={exportHook.progress}
+          phase={exportHook.phase}
+          error={exportHook.error}
+          canExport={sortedClips.length > 0 && sortedClips.every(c => clipUrls.has(c.id))}
+          onExport={() => exportHook.exportVideo(project)}
+          onCancel={exportHook.cancel}
+          onClose={() => {
+            if (exportHook.status !== 'recording' && exportHook.status !== 'encoding' && exportHook.status !== 'loading-ffmpeg') {
+              setShowExportModal(false);
+              exportHook.reset();
+            }
+          }}
+        />
       )}
 
       {/* Preview */}
