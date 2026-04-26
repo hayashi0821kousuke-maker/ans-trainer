@@ -958,6 +958,21 @@ button:active {
   flex-shrink: 0;
 }
 
+.ve-order-input {
+  width: 40px;
+  flex-shrink: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 4px;
+  text-align: center;
+  outline: none;
+}
+.ve-order-input:focus { border-color: var(--accent); }
+
 /* Speed card */
 .ve-speed-card {
   background: var(--bg-card);
@@ -988,6 +1003,55 @@ button:active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.ve-speed-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ve-speed-slider-row input[type="range"] { flex: 1; }
+.ve-speed-num {
+  width: 62px;
+  flex-shrink: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 4px 6px;
+  outline: none;
+  text-align: right;
+}
+.ve-speed-num:focus { border-color: var(--accent); }
+
+.ve-target-dur-row {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.ve-target-dur-row label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ve-target-dur-row input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 4px 8px;
+  outline: none;
+  width: 100%;
+}
+.ve-target-dur-row input:focus { border-color: var(--accent); }
+.ve-target-hint {
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .ve-trim-row {

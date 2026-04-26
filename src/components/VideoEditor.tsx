@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical, FolderOpen, FilePlus, Download } from 'lucide-react';
+import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical, FolderOpen, FilePlus, Download, Camera, Loader } from 'lucide-react';
 import type { VideoClipData, Telop, ImageInsert, BGMTrack, VideoProject, TelopStyle } from '../types';
 import { generateId } from '../defaults';
 import VideoTimeline from './VideoTimeline';
@@ -59,6 +59,7 @@ export default function VideoEditor() {
   const [activePanel, setActivePanel] = useState<'clips' | 'telops' | 'images' | 'bgm' | 'speed'>('clips');
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [dragOverClipId, setDragOverClipId] = useState<string | null>(null);
+  const [capturingClipId, setCapturingClipId] = useState<string | null>(null);
   const [showProjectSheet, setShowProjectSheet] = useState(false);
   const [showExportModal,  setShowExportModal]  = useState(false);
   const [savedProjects, setSavedProjects] = useState<VideoProject[]>(loadAllProjects);
@@ -82,6 +83,8 @@ export default function VideoEditor() {
   const isPlayingRef = useRef(false);
   // Guard against multiple concurrent clip-advance calls
   const advancingRef = useRef(false);
+  // Timer for targetDuration freeze-frame delay
+  const freezeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateProject = useCallback((fn: (p: VideoProject) => VideoProject) => {
     setProject(prev => ({ ...fn(prev), updatedAt: new Date().toISOString() }));
@@ -183,8 +186,21 @@ export default function VideoEditor() {
   }, []);
 
   const handleVideoEnded = useCallback(() => {
+    const clip = sortedClips[currentClipIndex];
+    if (clip?.targetDuration) {
+      const effDur = ((clip.endTrim > 0 ? clip.endTrim : clip.duration) - clip.startTrim) / clip.speed;
+      const extraMs = Math.max(0, (clip.targetDuration - effDur) * 1000);
+      if (extraMs > 100) {
+        if (freezeTimerRef.current) clearTimeout(freezeTimerRef.current);
+        freezeTimerRef.current = setTimeout(() => {
+          freezeTimerRef.current = null;
+          advanceClip(currentClipIndex, sortedClips.length);
+        }, extraMs);
+        return;
+      }
+    }
     advanceClip(currentClipIndex, sortedClips.length);
-  }, [advanceClip, currentClipIndex, sortedClips.length]);
+  }, [advanceClip, currentClipIndex, sortedClips]);
 
   const handleVideoTimeUpdate = useCallback(() => {
     const video = videoRef.current;
@@ -256,6 +272,7 @@ export default function VideoEditor() {
       video.pause();
       stopBGMWithFade();
       setIsPlaying(false);
+      if (freezeTimerRef.current) { clearTimeout(freezeTimerRef.current); freezeTimerRef.current = null; }
     } else {
       video.play().catch(() => {});
       if (bgmUrl) playBGMWithFade();
@@ -436,6 +453,69 @@ export default function VideoEditor() {
       ...p,
       clips: p.clips.map(c => c.id === id ? { ...c, speed } : c),
     }));
+  };
+
+  const updateClipTargetDuration = (id: string, val: number | undefined) => {
+    updateProject(p => ({
+      ...p,
+      clips: p.clips.map(c => c.id === id ? { ...c, targetDuration: val } : c),
+    }));
+  };
+
+  const updateClipOrder = (clipId: string, newPos: number) => {
+    updateProject(p => {
+      const clips = [...p.clips].sort((a, b) => a.order - b.order);
+      const fromIdx = clips.findIndex(c => c.id === clipId);
+      const [moved] = clips.splice(fromIdx, 1);
+      clips.splice(newPos, 0, moved);
+      return { ...p, clips: clips.map((c, i) => ({ ...c, order: i })) };
+    });
+  };
+
+  const captureFrame = async (clip: VideoClipData) => {
+    const url = clipUrls.get(clip.id);
+    if (!url || capturingClipId) return;
+    setCapturingClipId(clip.id);
+
+    const seekTo = (playingClip?.id === clip.id && videoRef.current)
+      ? videoRef.current.currentTime
+      : (clip.startTrim + (clip.endTrim > 0 ? clip.endTrim : clip.duration)) / 2;
+
+    await new Promise<void>(resolve => {
+      const vid = document.createElement('video');
+      vid.playsInline = true;
+      vid.muted = true;
+      vid.src = url;
+
+      const doCapture = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640; canvas.height = 360;
+        canvas.getContext('2d')!.drawImage(vid, 0, 0, 640, 360);
+        canvas.toBlob(blob => {
+          if (!blob) { resolve(); return; }
+          const blobUrl = URL.createObjectURL(blob);
+          const id = generateId();
+          setImageUrls(prev => new Map([...prev, [id, blobUrl]]));
+          updateProject(p => ({
+            ...p,
+            imageInserts: [...p.imageInserts, {
+              id, afterClipId: clip.id,
+              name: `${clip.name.replace(/\.[^.]+$/, '')}_frame.jpg`,
+              displayDuration: 3,
+              order: p.imageInserts.length,
+            }],
+          }));
+          resolve();
+        }, 'image/jpeg', 0.92);
+      };
+
+      vid.addEventListener('loadedmetadata', () => { vid.currentTime = seekTo; }, { once: true });
+      vid.addEventListener('seeked', doCapture, { once: true });
+      vid.onerror = () => resolve();
+      vid.load();
+    });
+
+    setCapturingClipId(null);
   };
 
   const updateClipTrim = (id: string, field: 'startTrim' | 'endTrim', val: number) => {
@@ -756,9 +836,32 @@ export default function VideoEditor() {
                   <p className="ve-clip-name">{clip.name}</p>
                   <p className="ve-clip-meta">
                     {formatTime(clip.duration)} · ×{clip.speed}
+                    {clip.targetDuration != null ? ` → ${clip.targetDuration}s` : ''}
                   </p>
                 </div>
-                <span className="ve-clip-num">#{idx + 1}</span>
+                <input
+                  className="ve-order-input"
+                  type="number"
+                  min={1}
+                  max={sortedClips.length}
+                  value={idx + 1}
+                  title="順番"
+                  onClick={e => e.stopPropagation()}
+                  onChange={e => {
+                    const pos = Math.min(sortedClips.length, Math.max(1, Number(e.target.value))) - 1;
+                    updateClipOrder(clip.id, pos);
+                  }}
+                />
+                <button
+                  className="btn-icon-sm"
+                  title="現在フレームを静止画として挿入"
+                  disabled={!clipUrls.has(clip.id) || capturingClipId === clip.id}
+                  onClick={e => { e.stopPropagation(); captureFrame(clip); }}
+                >
+                  {capturingClipId === clip.id
+                    ? <Loader size={13} className="spin" />
+                    : <Camera size={13} />}
+                </button>
                 <button
                   className="btn-icon-sm btn-danger"
                   onClick={e => { e.stopPropagation(); removeClip(clip.id); }}
@@ -805,40 +908,87 @@ export default function VideoEditor() {
           <div className="ve-section">
             <p className="ve-section-label">各クリップの再生速度とトリムを調整します</p>
             {sortedClips.length === 0 && <p className="ve-hint">クリップがありません</p>}
-            {sortedClips.map(clip => (
-              <div key={clip.id} className="ve-speed-card">
-                <p className="ve-clip-name">{clip.name}</p>
-                <div className="ve-speed-row">
-                  {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0].map(s => (
-                    <button
-                      key={s}
-                      className={`ve-speed-btn${clip.speed === s ? ' active' : ''}`}
-                      onClick={() => updateClipSpeed(clip.id, s)}
-                    >
-                      ×{s}
-                    </button>
-                  ))}
-                </div>
-                <div className="ve-trim-row">
-                  <label>
-                    開始 (秒)
+            {sortedClips.map(clip => {
+              const effDur = ((clip.endTrim > 0 ? clip.endTrim : clip.duration) - clip.startTrim) / clip.speed;
+              return (
+                <div key={clip.id} className="ve-speed-card">
+                  <p className="ve-clip-name">{clip.name}</p>
+
+                  {/* Speed presets */}
+                  <div className="ve-speed-row">
+                    {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0].map(s => (
+                      <button
+                        key={s}
+                        className={`ve-speed-btn${clip.speed === s ? ' active' : ''}`}
+                        onClick={() => updateClipSpeed(clip.id, s)}
+                      >
+                        ×{s}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Speed slider + number */}
+                  <div className="ve-speed-slider-row">
                     <input
-                      type="number" min={0} max={clip.duration} step={0.1}
-                      value={clip.startTrim}
-                      onChange={e => updateClipTrim(clip.id, 'startTrim', Number(e.target.value))}
+                      type="range" min={0.25} max={4.0} step={0.05}
+                      value={clip.speed}
+                      onChange={e => updateClipSpeed(clip.id, Number(e.target.value))}
                     />
-                  </label>
-                  <label>
-                    終了 (0=末尾)
                     <input
-                      type="number" min={0} max={clip.duration} step={0.1}
-                      value={clip.endTrim}
-                      onChange={e => updateClipTrim(clip.id, 'endTrim', Number(e.target.value))}
+                      className="ve-speed-num"
+                      type="number" min={0.25} max={4.0} step={0.05}
+                      value={clip.speed}
+                      onChange={e => {
+                        const v = Math.min(4, Math.max(0.25, Number(e.target.value)));
+                        if (!isNaN(v)) updateClipSpeed(clip.id, v);
+                      }}
                     />
-                  </label>
+                  </div>
+
+                  {/* Trim */}
+                  <div className="ve-trim-row">
+                    <label>
+                      開始 (秒)
+                      <input
+                        type="number" min={0} max={clip.duration} step={0.1}
+                        value={clip.startTrim}
+                        onChange={e => updateClipTrim(clip.id, 'startTrim', Number(e.target.value))}
+                      />
+                    </label>
+                    <label>
+                      終了 (0=末尾)
+                      <input
+                        type="number" min={0} max={clip.duration} step={0.1}
+                        value={clip.endTrim}
+                        onChange={e => updateClipTrim(clip.id, 'endTrim', Number(e.target.value))}
+                      />
+                    </label>
+                  </div>
+
+                  {/* Target duration (stretch) */}
+                  <div className="ve-target-dur-row">
+                    <label>
+                      引き伸ばし先 (秒)
+                      <span className="ve-target-hint">
+                        再生時間: {effDur.toFixed(1)}s
+                        {clip.targetDuration != null && clip.targetDuration > effDur
+                          ? ` → 静止延長 +${(clip.targetDuration - effDur).toFixed(1)}s`
+                          : ''}
+                      </span>
+                      <input
+                        type="number" min={0} step={0.5}
+                        placeholder={`${effDur.toFixed(1)} (なし)`}
+                        value={clip.targetDuration ?? ''}
+                        onChange={e => {
+                          const v = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value));
+                          updateClipTargetDuration(clip.id, v);
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

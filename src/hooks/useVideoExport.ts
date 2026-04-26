@@ -189,7 +189,8 @@ export function useVideoExport(
       const totalDuration = segs.reduce((s, seg) => {
         if (seg.kind === 'clip') {
           const c = seg.clip;
-          return s + ((c.endTrim > 0 ? c.endTrim : c.duration) - c.startTrim) / c.speed;
+          const effDur = ((c.endTrim > 0 ? c.endTrim : c.duration) - c.startTrim) / c.speed;
+          return s + (c.targetDuration != null ? Math.max(effDur, c.targetDuration) : effDur);
         }
         return s + seg.duration;
       }, 0);
@@ -220,6 +221,7 @@ export function useVideoExport(
           if (!url) throw new Error(`クリップ "${clip.name}" のファイルが読み込まれていません`);
 
           const effDur = ((clip.endTrim > 0 ? clip.endTrim : clip.duration) - clip.startTrim) / clip.speed;
+          const totalClipDur = clip.targetDuration != null ? Math.max(effDur, clip.targetDuration) : effDur;
           currentTelops = telops;
           update({
             phase: `録画中 ${si + 1}/${segs.length}: ${clip.name}`,
@@ -253,7 +255,14 @@ export function useVideoExport(
             videoEl.onerror = () => { cleanup(); reject(new Error(`動画の読み込みに失敗: ${clip.name}`)); };
           });
 
-          elapsed += effDur;
+          // Freeze last frame for targetDuration stretch
+          const freezeMs = (totalClipDur - effDur) * 1000;
+          if (freezeMs > 100 && !cancelRef.current) {
+            update({ phase: `静止フレーム延長中 ${si + 1}/${segs.length}: ${clip.name}` });
+            await new Promise(r => setTimeout(r, freezeMs));
+          }
+
+          elapsed += totalClipDur;
 
         } else {
           // Image segment

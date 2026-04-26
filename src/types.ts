@@ -78,6 +78,7 @@ export interface VideoClipData {
   order: number;
   startTrim: number;
   endTrim: number;
+  targetDuration?: number; // stretch clip to this total seconds by freezing last frame
 }
 
 export interface ImageInsert {

@@ -13,10 +13,11 @@ interface Props {
   onClipClick: (id: string) => void;
 }
 
-// Effective playback duration of a clip (trimmed + speed)
+// Effective playback duration of a clip (trimmed + speed + optional stretch)
 function clipEffDuration(clip: VideoClipData): number {
   const raw = (clip.endTrim > 0 ? clip.endTrim : clip.duration) - clip.startTrim;
-  return Math.max(0, raw / clip.speed);
+  const playbackDur = Math.max(0, raw / clip.speed);
+  return clip.targetDuration != null ? Math.max(playbackDur, clip.targetDuration) : playbackDur;
 }
 
 // Build the ordered sequence of segments: clips interleaved with images
