@@ -41,28 +41,46 @@ export default function VideoEditor() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const clipObjectUrls = useRef<Map<string, string>>(new Map());
-  const imageObjectUrls = useRef<Map<string, string>>(new Map());
+  // State (not ref) so that thumbnail re-renders when images are loaded
+  const [imageUrlMap, setImageUrlMap] = useState<Map<string, string>>(new Map());
   const bgmObjectUrl = useRef<string | null>(null);
 
   const updateProject = (fn: (p: VideoProject) => VideoProject) => {
     setProject(prev => ({ ...fn(prev), updatedAt: new Date().toISOString() }));
   };
 
-  // Build object URLs when files change
+  // Build object URLs when files change; clean up on unmount
   useEffect(() => {
+    const newUrls: Array<[string, string]> = [];
     clipFiles.forEach((file, id) => {
       if (!clipObjectUrls.current.has(id)) {
-        clipObjectUrls.current.set(id, URL.createObjectURL(file));
+        const url = URL.createObjectURL(file);
+        clipObjectUrls.current.set(id, url);
+        newUrls.push([id, url]);
       }
     });
+    return () => {
+      newUrls.forEach(([, url]) => URL.revokeObjectURL(url));
+    };
   }, [clipFiles]);
 
   useEffect(() => {
+    const newEntries: Array<[string, string]> = [];
     imageFiles.forEach((file, id) => {
-      if (!imageObjectUrls.current.has(id)) {
-        imageObjectUrls.current.set(id, URL.createObjectURL(file));
+      if (!imageUrlMap.has(id)) {
+        newEntries.push([id, URL.createObjectURL(file)]);
       }
     });
+    if (newEntries.length > 0) {
+      setImageUrlMap(prev => {
+        const next = new Map(prev);
+        newEntries.forEach(([id, url]) => next.set(id, url));
+        return next;
+      });
+    }
+    return () => {
+      newEntries.forEach(([, url]) => URL.revokeObjectURL(url));
+    };
   }, [imageFiles]);
 
   useEffect(() => {
@@ -89,6 +107,9 @@ export default function VideoEditor() {
   // Current playing clip
   const playingClip = sortedClips[currentClipIndex] ?? null;
 
+  const isPlayingRef = useRef(false);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
   useEffect(() => {
     if (!videoRef.current || !playingClip) return;
     const url = clipObjectUrls.current.get(playingClip.id);
@@ -96,7 +117,7 @@ export default function VideoEditor() {
       videoRef.current.src = url;
       videoRef.current.playbackRate = playingClip.speed;
       videoRef.current.currentTime = playingClip.startTrim;
-      if (isPlaying) videoRef.current.play();
+      if (isPlayingRef.current) videoRef.current.play().catch(() => null);
     }
   }, [currentClipIndex, playingClip?.id]);
 
@@ -483,8 +504,8 @@ export default function VideoEditor() {
             {project.imageInserts.map(img => (
               <div key={img.id} className="ve-img-card">
                 <div className="ve-img-thumb">
-                  {imageObjectUrls.current.has(img.id)
-                    ? <img src={imageObjectUrls.current.get(img.id)} alt={img.name} />
+                  {imageUrlMap.has(img.id)
+                    ? <img src={imageUrlMap.get(img.id)} alt={img.name} />
                     : <Image size={20} />}
                 </div>
                 <div className="ve-img-info">
