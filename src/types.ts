@@ -55,6 +55,8 @@ export interface TelopStyle {
   color: string;
   backgroundColor: string;
   position: 'top' | 'center' | 'bottom';
+  xPct: number; // 0–100, horizontal center
+  yPct: number; // 0–100, vertical center (0=top)
   bold: boolean;
   italic: boolean;
 }

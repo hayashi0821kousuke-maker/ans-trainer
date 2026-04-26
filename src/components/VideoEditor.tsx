@@ -9,9 +9,15 @@ const DEFAULT_TELOP_STYLE: TelopStyle = {
   color: '#ffffff',
   backgroundColor: 'rgba(0,0,0,0.6)',
   position: 'bottom',
+  xPct: 50,
+  yPct: 85,
   bold: true,
   italic: false,
 };
+
+function positionToY(pos: TelopStyle['position']): number {
+  return pos === 'top' ? 10 : pos === 'center' ? 50 : 85;
+}
 
 function newProject(): VideoProject {
   return {
@@ -43,8 +49,9 @@ export default function VideoEditor() {
   const [currentClipIndex, setCurrentClipIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const videoWrapRef = useRef<HTMLDivElement>(null);
+  const audioRef    = useRef<HTMLAudioElement>(null);
   // Ref mirrors isPlaying to avoid stale closures in effects
   const isPlayingRef = useRef(false);
   // Guard against multiple concurrent clip-advance calls
@@ -257,6 +264,33 @@ export default function VideoEditor() {
     setDragOverClipId(null);
   };
 
+  // ── Telop drag-to-reposition (paused state) ──
+
+  const handleTelopDragStart = useCallback((e: React.PointerEvent, telopId: string) => {
+    if (isPlayingRef.current) return;
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const wrap = videoWrapRef.current;
+    if (!wrap) return;
+
+    const onMove = (ev: PointerEvent) => {
+      const rect = wrap.getBoundingClientRect();
+      const x = Math.min(95, Math.max(5, ((ev.clientX - rect.left) / rect.width) * 100));
+      const y = Math.min(95, Math.max(5, ((ev.clientY - rect.top) / rect.height) * 100));
+      setProject(prev => ({
+        ...prev,
+        updatedAt: new Date().toISOString(),
+        telops: prev.telops.map(t =>
+          t.id === telopId ? { ...t, style: { ...t.style, xPct: x, yPct: y } } : t
+        ),
+      }));
+    };
+
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', () => el.removeEventListener('pointermove', onMove), { once: true });
+  }, []);
+
   // ── Mutations ──
 
   const removeClip = (id: string) => {
@@ -340,11 +374,11 @@ export default function VideoEditor() {
     updateProject(p => ({ ...p, imageInserts: p.imageInserts.filter(img => img.id !== id) }));
   };
 
-  // Telops to overlay at current playback time
+  // Playing: only telops whose time range is active. Paused: all clip telops (for dragging)
   const overlayTelops = playingClip
-    ? project.telops.filter(
-        t => t.clipId === playingClip.id && currentTime >= t.startTime && currentTime <= t.endTime
-      )
+    ? isPlaying
+      ? project.telops.filter(t => t.clipId === playingClip.id && currentTime >= t.startTime && currentTime <= t.endTime)
+      : project.telops.filter(t => t.clipId === playingClip.id)
     : [];
 
   return (
@@ -360,7 +394,7 @@ export default function VideoEditor() {
 
       {/* Preview */}
       <div className="ve-preview">
-        <div className="ve-video-wrap">
+        <div className="ve-video-wrap" ref={videoWrapRef}>
           {sortedClips.length === 0 ? (
             <div className="ve-empty-preview">
               <Upload size={32} />
@@ -375,21 +409,32 @@ export default function VideoEditor() {
                 onEnded={handleVideoEnded}
                 playsInline
               />
-              {overlayTelops.map(t => (
-                <div
-                  key={t.id}
-                  className={`ve-telop-overlay ve-telop-${t.style.position}`}
-                  style={{
-                    fontSize: t.style.fontSize,
-                    color: t.style.color,
-                    background: t.style.backgroundColor,
-                    fontWeight: t.style.bold ? 700 : 400,
-                    fontStyle: t.style.italic ? 'italic' : 'normal',
-                  }}
-                >
-                  {t.text}
-                </div>
-              ))}
+              {overlayTelops.map(t => {
+                const xPct = t.style.xPct ?? 50;
+                const yPct = t.style.yPct ?? positionToY(t.style.position);
+                const outOfRange = !isPlaying && (currentTime < t.startTime || currentTime > t.endTime);
+                return (
+                  <div
+                    key={t.id}
+                    className={`ve-telop-abs${!isPlaying ? ' draggable' : ''}${outOfRange ? ' out-of-range' : ''}`}
+                    style={{
+                      left: `${xPct}%`,
+                      top: `${yPct}%`,
+                      fontSize: t.style.fontSize,
+                      color: t.style.color,
+                      background: t.style.backgroundColor,
+                      fontWeight: t.style.bold ? 700 : 400,
+                      fontStyle: t.style.italic ? 'italic' : 'normal',
+                    }}
+                    onPointerDown={e => handleTelopDragStart(e, t.id)}
+                  >
+                    {t.text}
+                  </div>
+                );
+              })}
+              {!isPlaying && overlayTelops.length > 0 && (
+                <div className="ve-drag-hint">ドラッグでテロップを移動</div>
+              )}
             </>
           )}
         </div>
@@ -744,10 +789,13 @@ function TelopCard({ telop, clipDuration, onChange, onRemove }: TelopCardProps) 
               />
             </label>
             <label className="ve-form-label">
-              位置
+              位置プリセット
               <select
                 value={telop.style.position}
-                onChange={e => onChange({ style: { ...telop.style, position: e.target.value as TelopStyle['position'] } })}
+                onChange={e => {
+                  const pos = e.target.value as TelopStyle['position'];
+                  onChange({ style: { ...telop.style, position: pos, yPct: positionToY(pos), xPct: 50 } });
+                }}
               >
                 <option value="top">上</option>
                 <option value="center">中央</option>
@@ -779,6 +827,22 @@ function TelopCard({ telop, clipDuration, onChange, onRemove }: TelopCardProps) 
               斜体
             </label>
           </div>
+          <label className="ve-form-label">
+            横位置 ({Math.round(telop.style.xPct ?? 50)}%)
+            <input
+              type="range" min={5} max={95} step={1}
+              value={telop.style.xPct ?? 50}
+              onChange={e => onChange({ style: { ...telop.style, xPct: Number(e.target.value) } })}
+            />
+          </label>
+          <label className="ve-form-label">
+            縦位置 ({Math.round(telop.style.yPct ?? positionToY(telop.style.position))}%)
+            <input
+              type="range" min={5} max={95} step={1}
+              value={telop.style.yPct ?? positionToY(telop.style.position)}
+              onChange={e => onChange({ style: { ...telop.style, yPct: Number(e.target.value) } })}
+            />
+          </label>
         </div>
       )}
     </div>
