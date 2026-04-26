@@ -48,4 +48,60 @@ export interface SessionSet {
   reps: number;
 }
 
-export type TabType = 'training' | 'equipment' | 'inbody' | 'history';
+export type TabType = 'training' | 'equipment' | 'inbody' | 'history' | 'video';
+
+export interface TelopStyle {
+  fontSize: number;
+  color: string;
+  backgroundColor: string;
+  position: 'top' | 'center' | 'bottom';
+  bold: boolean;
+  italic: boolean;
+}
+
+export interface Telop {
+  id: string;
+  clipId: string;
+  text: string;
+  startTime: number;
+  endTime: number;
+  style: TelopStyle;
+}
+
+export interface VideoClipData {
+  id: string;
+  name: string;
+  duration: number;
+  speed: number;
+  order: number;
+  startTrim: number;
+  endTrim: number;
+}
+
+export interface ImageInsert {
+  id: string;
+  afterClipId: string | null;
+  name: string;
+  displayDuration: number;
+  order: number;
+}
+
+export interface BGMTrack {
+  id: string;
+  name: string;
+  volume: number;
+  loop: boolean;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+}
+
+export interface VideoProject {
+  id: string;
+  name: string;
+  clips: VideoClipData[];
+  telops: Telop[];
+  imageInserts: ImageInsert[];
+  bgm: BGMTrack | null;
+  createdAt: string;
+  updatedAt: string;
+}
