@@ -910,8 +910,20 @@ button:active {
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-.ve-clip-card.selected { border-color: var(--accent); background: var(--accent-dim); }
-.ve-clip-card:active { background: var(--bg-card-hover); }
+.ve-clip-card.selected  { border-color: var(--accent); background: var(--accent-dim); }
+.ve-clip-card.drag-over { border-color: var(--accent); border-style: dashed; background: var(--accent-dim); }
+.ve-clip-card.dragging  { opacity: 0.4; }
+.ve-clip-card:active    { background: var(--bg-card-hover); }
+
+.ve-drag-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+.ve-drag-handle:active { cursor: grabbing; }
 
 .ve-clip-thumb {
   width: 44px; height: 32px;

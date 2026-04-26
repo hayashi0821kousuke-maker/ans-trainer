@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
+import { Upload, Play, Pause, Plus, Trash2, Music, Image, Type, Zap, ChevronDown, ChevronUp, Volume2, GripVertical } from 'lucide-react';
 import type { VideoClipData, Telop, ImageInsert, BGMTrack, VideoProject, TelopStyle } from '../types';
 import { generateId } from '../defaults';
 
@@ -35,6 +35,8 @@ export default function VideoEditor() {
 
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'clips' | 'telops' | 'images' | 'bgm' | 'speed'>('clips');
+  const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
+  const [dragOverClipId, setDragOverClipId] = useState<string | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentClipIndex, setCurrentClipIndex] = useState(0);
@@ -215,6 +217,43 @@ export default function VideoEditor() {
       bgm: { id: generateId(), name: file.name, volume: 0.5, loop: true, fadeInDuration: 0, fadeOutDuration: 0 },
     }));
     e.target.value = '';
+  };
+
+  // ── Drag & drop clip reorder ──
+
+  const handleClipDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedClipId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleClipDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== draggedClipId) setDragOverClipId(id);
+  };
+
+  const handleClipDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedClipId || draggedClipId === targetId) {
+      setDraggedClipId(null);
+      setDragOverClipId(null);
+      return;
+    }
+    updateProject(p => {
+      const clips = [...p.clips].sort((a, b) => a.order - b.order);
+      const fromIdx = clips.findIndex(c => c.id === draggedClipId);
+      const toIdx   = clips.findIndex(c => c.id === targetId);
+      const [moved] = clips.splice(fromIdx, 1);
+      clips.splice(toIdx, 0, moved);
+      return { ...p, clips: clips.map((c, i) => ({ ...c, order: i })) };
+    });
+    setDraggedClipId(null);
+    setDragOverClipId(null);
+  };
+
+  const handleClipDragEnd = () => {
+    setDraggedClipId(null);
+    setDragOverClipId(null);
   };
 
   // ── Mutations ──
@@ -407,9 +446,17 @@ export default function VideoEditor() {
             {sortedClips.map((clip, idx) => (
               <div
                 key={clip.id}
-                className={`ve-clip-card${selectedClipId === clip.id ? ' selected' : ''}`}
+                className={`ve-clip-card${selectedClipId === clip.id ? ' selected' : ''}${dragOverClipId === clip.id ? ' drag-over' : ''}${draggedClipId === clip.id ? ' dragging' : ''}`}
+                draggable
+                onDragStart={e => handleClipDragStart(e, clip.id)}
+                onDragOver={e => handleClipDragOver(e, clip.id)}
+                onDrop={e => handleClipDrop(e, clip.id)}
+                onDragEnd={handleClipDragEnd}
                 onClick={() => setSelectedClipId(clip.id)}
               >
+                <div className="ve-drag-handle">
+                  <GripVertical size={14} />
+                </div>
                 <div className="ve-clip-thumb">
                   <Play size={16} />
                 </div>
