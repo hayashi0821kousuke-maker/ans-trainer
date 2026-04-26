@@ -27,9 +27,11 @@ function newProject(): VideoProject {
 
 export default function VideoEditor() {
   const [project, setProject] = useState<VideoProject>(newProject);
-  const [clipFiles, setClipFiles] = useState<Map<string, File>>(new Map());
-  const [imageFiles, setImageFiles] = useState<Map<string, File>>(new Map());
-  const [bgmFile, setBgmFile] = useState<File | null>(null);
+
+  // Store object URLs in state so JSX re-renders when they change
+  const [clipUrls, setClipUrls] = useState<Map<string, string>>(new Map());
+  const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
+  const [bgmUrl, setBgmUrl] = useState<string | null>(null);
 
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'clips' | 'telops' | 'images' | 'bgm' | 'speed'>('clips');
@@ -40,101 +42,131 @@ export default function VideoEditor() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const clipObjectUrls = useRef<Map<string, string>>(new Map());
-  const imageObjectUrls = useRef<Map<string, string>>(new Map());
-  const bgmObjectUrl = useRef<string | null>(null);
+  // Ref mirrors isPlaying to avoid stale closures in effects
+  const isPlayingRef = useRef(false);
+  // Guard against multiple concurrent clip-advance calls
+  const advancingRef = useRef(false);
 
-  const updateProject = (fn: (p: VideoProject) => VideoProject) => {
+  const updateProject = useCallback((fn: (p: VideoProject) => VideoProject) => {
     setProject(prev => ({ ...fn(prev), updatedAt: new Date().toISOString() }));
-  };
+  }, []);
 
-  // Build object URLs when files change
+  // Keep ref in sync with state
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // Revoke all object URLs on unmount
   useEffect(() => {
-    clipFiles.forEach((file, id) => {
-      if (!clipObjectUrls.current.has(id)) {
-        clipObjectUrls.current.set(id, URL.createObjectURL(file));
-      }
-    });
-  }, [clipFiles]);
+    return () => {
+      clipUrls.forEach(url => URL.revokeObjectURL(url));
+      imageUrls.forEach(url => URL.revokeObjectURL(url));
+      if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    imageFiles.forEach((file, id) => {
-      if (!imageObjectUrls.current.has(id)) {
-        imageObjectUrls.current.set(id, URL.createObjectURL(file));
-      }
-    });
-  }, [imageFiles]);
-
-  useEffect(() => {
-    if (bgmFile) {
-      if (bgmObjectUrl.current) URL.revokeObjectURL(bgmObjectUrl.current);
-      bgmObjectUrl.current = URL.createObjectURL(bgmFile);
-      if (audioRef.current) {
-        audioRef.current.src = bgmObjectUrl.current;
-        audioRef.current.volume = project.bgm?.volume ?? 0.5;
-        audioRef.current.loop = project.bgm?.loop ?? true;
-      }
-    }
-  }, [bgmFile]);
-
-  // Sorted clips
   const sortedClips = [...project.clips].sort((a, b) => a.order - b.order);
   const selectedClip = project.clips.find(c => c.id === selectedClipId) ?? null;
-
-  // Active clip telops
   const activeClipTelops = selectedClipId
     ? project.telops.filter(t => t.clipId === selectedClipId)
     : [];
-
-  // Current playing clip
   const playingClip = sortedClips[currentClipIndex] ?? null;
 
+  // Load clip into video element and play if needed
   useEffect(() => {
-    if (!videoRef.current || !playingClip) return;
-    const url = clipObjectUrls.current.get(playingClip.id);
-    if (url) {
-      videoRef.current.src = url;
+    const video = videoRef.current;
+    if (!video || !playingClip) return;
+    const url = clipUrls.get(playingClip.id);
+    if (!url) return;
+
+    advancingRef.current = false;
+    video.src = url;
+
+    const onMeta = () => {
+      video.playbackRate = playingClip.speed;
+      video.currentTime = playingClip.startTrim;
+      if (isPlayingRef.current) video.play().catch(() => {});
+    };
+    video.addEventListener('loadedmetadata', onMeta, { once: true });
+    video.load();
+
+    return () => video.removeEventListener('loadedmetadata', onMeta);
+  // Intentionally only re-run when index changes, not every playingClip property change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentClipIndex, clipUrls]);
+
+  // Sync playbackRate live when speed is edited while playing the same clip
+  useEffect(() => {
+    if (videoRef.current && playingClip) {
       videoRef.current.playbackRate = playingClip.speed;
-      videoRef.current.currentTime = playingClip.startTrim;
-      if (isPlaying) videoRef.current.play();
     }
-  }, [currentClipIndex, playingClip?.id]);
+  }, [playingClip?.speed]);
+
+  // Sync BGM into audio element
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !bgmUrl) return;
+    audio.src = bgmUrl;
+    audio.volume = project.bgm?.volume ?? 0.5;
+    audio.loop = project.bgm?.loop ?? true;
+  }, [bgmUrl]);
+
+  const advanceClip = useCallback((currentIndex: number, total: number) => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    const next = currentIndex + 1;
+    if (next < total) {
+      setCurrentClipIndex(next);
+    } else {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      audioRef.current?.pause();
+      // Reset to first clip — use a sentinel to force effect to re-run
+      setCurrentClipIndex(-1);
+      requestAnimationFrame(() => setCurrentClipIndex(0));
+    }
+  }, []);
+
+  const handleVideoEnded = useCallback(() => {
+    advanceClip(currentClipIndex, sortedClips.length);
+  }, [advanceClip, currentClipIndex, sortedClips.length]);
 
   const handleVideoTimeUpdate = useCallback(() => {
-    if (!videoRef.current || !playingClip) return;
-    setCurrentTime(videoRef.current.currentTime);
-    const endAt = playingClip.endTrim > 0 ? playingClip.endTrim : videoRef.current.duration;
-    if (videoRef.current.currentTime >= endAt) {
-      if (currentClipIndex + 1 < sortedClips.length) {
-        setCurrentClipIndex(i => i + 1);
-      } else {
-        setIsPlaying(false);
-        setCurrentClipIndex(0);
-        videoRef.current.currentTime = sortedClips[0]?.startTrim ?? 0;
-      }
+    const video = videoRef.current;
+    if (!video || !playingClip) return;
+    const t = video.currentTime;
+    setCurrentTime(t);
+
+    if (playingClip.endTrim > 0 && t >= playingClip.endTrim) {
+      video.pause();
+      advanceClip(currentClipIndex, sortedClips.length);
     }
-  }, [currentClipIndex, playingClip, sortedClips]);
+  }, [playingClip, currentClipIndex, sortedClips.length, advanceClip]);
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
     if (isPlaying) {
-      videoRef.current.pause();
+      video.pause();
       audioRef.current?.pause();
+      setIsPlaying(false);
     } else {
-      videoRef.current.play();
-      if (bgmFile) audioRef.current?.play();
+      video.play().catch(() => {});
+      if (bgmUrl) audioRef.current?.play().catch(() => {});
+      setIsPlaying(true);
     }
-    setIsPlaying(p => !p);
   };
+
+  // ── Upload handlers ──
 
   const handleClipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     const newClips: VideoClipData[] = [];
-    const newFileMap = new Map(clipFiles);
+    const urlUpdates = new Map<string, string>();
 
     for (const file of files) {
       const id = generateId();
-      newFileMap.set(id, file);
+      urlUpdates.set(id, URL.createObjectURL(file));
       const duration = await getVideoDuration(file);
       newClips.push({
         id,
@@ -146,19 +178,20 @@ export default function VideoEditor() {
         endTrim: 0,
       });
     }
-    setClipFiles(newFileMap);
+    setClipUrls(prev => new Map([...prev, ...urlUpdates]));
     updateProject(p => ({ ...p, clips: [...p.clips, ...newClips] }));
     e.target.value = '';
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const newImageMap = new Map(imageFiles);
+    if (!files.length) return;
+    const urlUpdates = new Map<string, string>();
     const newInserts: ImageInsert[] = [];
 
     files.forEach(file => {
       const id = generateId();
-      newImageMap.set(id, file);
+      urlUpdates.set(id, URL.createObjectURL(file));
       newInserts.push({
         id,
         afterClipId: selectedClipId,
@@ -167,7 +200,7 @@ export default function VideoEditor() {
         order: project.imageInserts.length + newInserts.length,
       });
     });
-    setImageFiles(newImageMap);
+    setImageUrls(prev => new Map([...prev, ...urlUpdates]));
     updateProject(p => ({ ...p, imageInserts: [...p.imageInserts, ...newInserts] }));
     e.target.value = '';
   };
@@ -175,28 +208,32 @@ export default function VideoEditor() {
   const handleBGMUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBgmFile(file);
+    if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+    setBgmUrl(URL.createObjectURL(file));
     updateProject(p => ({
       ...p,
-      bgm: {
-        id: generateId(),
-        name: file.name,
-        volume: 0.5,
-        loop: true,
-        fadeInDuration: 0,
-        fadeOutDuration: 0,
-      },
+      bgm: { id: generateId(), name: file.name, volume: 0.5, loop: true, fadeInDuration: 0, fadeOutDuration: 0 },
     }));
     e.target.value = '';
   };
 
+  // ── Mutations ──
+
   const removeClip = (id: string) => {
+    setClipUrls(prev => {
+      const url = prev.get(id);
+      if (url) URL.revokeObjectURL(url);
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
     updateProject(p => ({
       ...p,
       clips: p.clips.filter(c => c.id !== id).map((c, i) => ({ ...c, order: i })),
       telops: p.telops.filter(t => t.clipId !== id),
     }));
     if (selectedClipId === id) setSelectedClipId(null);
+    setCurrentClipIndex(0);
   };
 
   const addTelop = () => {
@@ -228,9 +265,6 @@ export default function VideoEditor() {
       ...p,
       clips: p.clips.map(c => c.id === id ? { ...c, speed } : c),
     }));
-    if (videoRef.current && playingClip?.id === id) {
-      videoRef.current.playbackRate = speed;
-    }
   };
 
   const updateClipTrim = (id: string, field: 'startTrim' | 'endTrim', val: number) => {
@@ -241,15 +275,10 @@ export default function VideoEditor() {
   };
 
   const updateBGM = (patch: Partial<BGMTrack>) => {
-    updateProject(p => ({
-      ...p,
-      bgm: p.bgm ? { ...p.bgm, ...patch } : null,
-    }));
-    if (audioRef.current && patch.volume !== undefined) {
-      audioRef.current.volume = patch.volume;
-    }
-    if (audioRef.current && patch.loop !== undefined) {
-      audioRef.current.loop = patch.loop;
+    updateProject(p => ({ ...p, bgm: p.bgm ? { ...p.bgm, ...patch } : null }));
+    if (audioRef.current) {
+      if (patch.volume !== undefined) audioRef.current.volume = patch.volume;
+      if (patch.loop !== undefined) audioRef.current.loop = patch.loop;
     }
   };
 
@@ -261,18 +290,20 @@ export default function VideoEditor() {
   };
 
   const removeImageInsert = (id: string) => {
-    updateProject(p => ({
-      ...p,
-      imageInserts: p.imageInserts.filter(img => img.id !== id),
-    }));
+    setImageUrls(prev => {
+      const url = prev.get(id);
+      if (url) URL.revokeObjectURL(url);
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+    updateProject(p => ({ ...p, imageInserts: p.imageInserts.filter(img => img.id !== id) }));
   };
 
-  // Current telops to overlay on preview
+  // Telops to overlay at current playback time
   const overlayTelops = playingClip
-    ? project.telops.filter(t =>
-        t.clipId === playingClip.id &&
-        currentTime >= t.startTime &&
-        currentTime <= t.endTime
+    ? project.telops.filter(
+        t => t.clipId === playingClip.id && currentTime >= t.startTime && currentTime <= t.endTime
       )
     : [];
 
@@ -301,6 +332,7 @@ export default function VideoEditor() {
                 ref={videoRef}
                 className="ve-video"
                 onTimeUpdate={handleVideoTimeUpdate}
+                onEnded={handleVideoEnded}
                 playsInline
               />
               {overlayTelops.map(t => (
@@ -328,7 +360,7 @@ export default function VideoEditor() {
               {isPlaying ? <Pause size={20} /> : <Play size={20} />}
             </button>
             <span className="ve-clip-label">
-              {playingClip?.name ?? '—'} ({currentClipIndex + 1}/{sortedClips.length})
+              {playingClip?.name ?? '—'} ({Math.max(1, currentClipIndex + 1)}/{sortedClips.length})
             </span>
           </div>
         )}
@@ -388,7 +420,10 @@ export default function VideoEditor() {
                   </p>
                 </div>
                 <span className="ve-clip-num">#{idx + 1}</span>
-                <button className="btn-icon-sm btn-danger" onClick={e => { e.stopPropagation(); removeClip(clip.id); }}>
+                <button
+                  className="btn-icon-sm btn-danger"
+                  onClick={e => { e.stopPropagation(); removeClip(clip.id); }}
+                >
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -429,7 +464,7 @@ export default function VideoEditor() {
         {/* ── Speed ── */}
         {activePanel === 'speed' && (
           <div className="ve-section">
-            <p className="ve-section-label">各クリップの再生速度を調整します</p>
+            <p className="ve-section-label">各クリップの再生速度とトリムを調整します</p>
             {sortedClips.length === 0 && <p className="ve-hint">クリップがありません</p>}
             {sortedClips.map(clip => (
               <div key={clip.id} className="ve-speed-card">
@@ -483,8 +518,8 @@ export default function VideoEditor() {
             {project.imageInserts.map(img => (
               <div key={img.id} className="ve-img-card">
                 <div className="ve-img-thumb">
-                  {imageObjectUrls.current.has(img.id)
-                    ? <img src={imageObjectUrls.current.get(img.id)} alt={img.name} />
+                  {imageUrls.has(img.id)
+                    ? <img src={imageUrls.get(img.id)} alt={img.name} />
                     : <Image size={20} />}
                 </div>
                 <div className="ve-img-info">
@@ -570,7 +605,9 @@ export default function VideoEditor() {
                   ループ再生
                 </label>
                 <button className="btn-danger-sm" onClick={() => {
-                  setBgmFile(null);
+                  if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+                  setBgmUrl(null);
+                  audioRef.current?.pause();
                   updateProject(p => ({ ...p, bgm: null }));
                 }}>
                   BGMを削除
@@ -599,9 +636,12 @@ function TelopCard({ telop, clipDuration, onChange, onRemove }: TelopCardProps) 
   return (
     <div className="ve-telop-card">
       <div className="ve-telop-card-header" onClick={() => setOpen(o => !o)}>
-        <span className="ve-telop-preview-text">{telop.text.slice(0, 20)}</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn-icon-sm btn-danger" onClick={e => { e.stopPropagation(); onRemove(); }}>
+        <span className="ve-telop-preview-text">{telop.text.slice(0, 20) || '（空）'}</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            className="btn-icon-sm btn-danger"
+            onClick={e => { e.stopPropagation(); onRemove(); }}
+          >
             <Trash2 size={12} />
           </button>
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -620,29 +660,35 @@ function TelopCard({ telop, clipDuration, onChange, onRemove }: TelopCardProps) 
           <div className="ve-two-col">
             <label className="ve-form-label">
               開始 (秒)
-              <input type="number" min={0} max={clipDuration} step={0.1}
+              <input
+                type="number" min={0} max={clipDuration} step={0.1}
                 value={telop.startTime}
-                onChange={e => onChange({ startTime: Number(e.target.value) })} />
+                onChange={e => onChange({ startTime: Number(e.target.value) })}
+              />
             </label>
             <label className="ve-form-label">
               終了 (秒)
-              <input type="number" min={0} max={clipDuration} step={0.1}
+              <input
+                type="number" min={0} max={clipDuration} step={0.1}
                 value={telop.endTime}
-                onChange={e => onChange({ endTime: Number(e.target.value) })} />
+                onChange={e => onChange({ endTime: Number(e.target.value) })}
+              />
             </label>
           </div>
           <div className="ve-two-col">
             <label className="ve-form-label">
               文字サイズ
-              <input type="number" min={10} max={60} step={1}
+              <input
+                type="number" min={10} max={60} step={1}
                 value={telop.style.fontSize}
-                onChange={e => onChange({ style: { ...telop.style, fontSize: Number(e.target.value) } })} />
+                onChange={e => onChange({ style: { ...telop.style, fontSize: Number(e.target.value) } })}
+              />
             </label>
             <label className="ve-form-label">
               位置
               <select
                 value={telop.style.position}
-                onChange={e => onChange({ style: { ...telop.style, position: e.target.value as any } })}
+                onChange={e => onChange({ style: { ...telop.style, position: e.target.value as TelopStyle['position'] } })}
               >
                 <option value="top">上</option>
                 <option value="center">中央</option>
@@ -650,23 +696,27 @@ function TelopCard({ telop, clipDuration, onChange, onRemove }: TelopCardProps) 
               </select>
             </label>
           </div>
-          <div className="ve-two-col">
-            <label className="ve-form-label">
-              文字色
-              <input type="color"
-                value={telop.style.color}
-                onChange={e => onChange({ style: { ...telop.style, color: e.target.value } })} />
-            </label>
-          </div>
+          <label className="ve-form-label">
+            文字色
+            <input
+              type="color"
+              value={telop.style.color}
+              onChange={e => onChange({ style: { ...telop.style, color: e.target.value } })}
+            />
+          </label>
           <div className="ve-checks-row">
             <label className="ve-check-label">
-              <input type="checkbox" checked={telop.style.bold}
-                onChange={e => onChange({ style: { ...telop.style, bold: e.target.checked } })} />
+              <input
+                type="checkbox" checked={telop.style.bold}
+                onChange={e => onChange({ style: { ...telop.style, bold: e.target.checked } })}
+              />
               太字
             </label>
             <label className="ve-check-label">
-              <input type="checkbox" checked={telop.style.italic}
-                onChange={e => onChange({ style: { ...telop.style, italic: e.target.checked } })} />
+              <input
+                type="checkbox" checked={telop.style.italic}
+                onChange={e => onChange({ style: { ...telop.style, italic: e.target.checked } })}
+              />
               斜体
             </label>
           </div>
@@ -690,13 +740,7 @@ function getVideoDuration(file: File): Promise<number> {
     video.preload = 'metadata';
     const url = URL.createObjectURL(file);
     video.src = url;
-    video.onloadedmetadata = () => {
-      resolve(video.duration);
-      URL.revokeObjectURL(url);
-    };
-    video.onerror = () => {
-      resolve(0);
-      URL.revokeObjectURL(url);
-    };
+    video.onloadedmetadata = () => { resolve(video.duration); URL.revokeObjectURL(url); };
+    video.onerror = () => { resolve(0); URL.revokeObjectURL(url); };
   });
 }
