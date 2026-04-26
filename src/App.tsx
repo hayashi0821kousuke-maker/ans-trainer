@@ -5,6 +5,7 @@ import TrainingMenu from './components/TrainingMenu';
 import Equipment from './components/Equipment';
 import InBodyProfile from './components/InBodyProfile';
 import TrainingHistory from './components/TrainingHistory';
+import VideoEditor from './components/VideoEditor';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('training');
@@ -16,6 +17,7 @@ export default function App() {
         {activeTab === 'equipment' && <Equipment />}
         {activeTab === 'inbody' && <InBodyProfile />}
         {activeTab === 'history' && <TrainingHistory />}
+        {activeTab === 'video' && <VideoEditor />}
       </main>
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
