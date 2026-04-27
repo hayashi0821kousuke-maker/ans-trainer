@@ -34,11 +34,11 @@ TARGET_H       = 1920   # YouTube Shorts height
 
 # ASS color format: &HAABBGGRR  (A=alpha, B=blue, G=green, R=red)
 SPEAKER_COLORS: dict[str, str] = {
-    "narrator": "&H00FFFFFF",   # white
-    "cat":      "&H0000FF00",   # green
-    "customer": "&H000080FF",   # orange
+    "NARRATOR": "&H00FFFFFF",   # white
+    "CAT":      "&H0000FFFF",   # yellow
+    "CUSTOMER": "&H00FFFF00",   # cyan
 }
-DEFAULT_COLOR = "&H00FFFF00"    # yellow fallback
+DEFAULT_COLOR = "&H00FFFFFF"    # white fallback
 
 SFX_QUERY_MAP: dict[str, str] = {
     "intro":  "intro fanfare jingle short",
@@ -215,7 +215,8 @@ def build_subtitles(
             SPEAKER_COLORS.get(spk, DEFAULT_COLOR)
         )
         style.bold         = True
-        style.outline      = 3
+        style.outline      = 4
+        style.outlinecolor = _parse_ass_color("&H00000000")   # black
         style.shadow       = 1
         style.alignment    = 2    # bottom-center
         style.marginv      = 90
