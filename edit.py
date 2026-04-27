@@ -210,7 +210,7 @@ def build_subtitles(
         seen_speakers.add(spk)
         style = pysubs2.SSAStyle()
         style.fontname     = "Arial"
-        style.fontsize     = 62
+        style.fontsize     = 86
         style.primarycolor = _parse_ass_color(
             SPEAKER_COLORS.get(spk, DEFAULT_COLOR)
         )
