@@ -34,11 +34,11 @@ TARGET_H       = 1920   # YouTube Shorts height
 
 # ASS color format: &HAABBGGRR  (A=alpha, B=blue, G=green, R=red)
 SPEAKER_COLORS: dict[str, str] = {
-    "narrator": "&H00FFFFFF",   # white
-    "cat":      "&H0000FF00",   # green
-    "customer": "&H000080FF",   # orange
+    "NARRATOR": "&H00FFFFFF",   # white
+    "CAT":      "&H0000FFFF",   # yellow
+    "CUSTOMER": "&H00FFFF00",   # cyan
 }
-DEFAULT_COLOR = "&H00FFFF00"    # yellow fallback
+DEFAULT_COLOR = "&H00FFFFFF"    # white fallback
 
 SFX_QUERY_MAP: dict[str, str] = {
     "intro":  "intro fanfare jingle short",
@@ -190,6 +190,12 @@ def _parse_ass_color(s: str) -> pysubs2.Color:
     return pysubs2.Color(r=r, g=g, b=b, a=a)
 
 
+def _wrap_text(text: str, max_chars: int = 15) -> str:
+    """Insert ASS hard line-breaks every max_chars characters."""
+    chunks = [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
+    return r"\N".join(chunks)
+
+
 def build_subtitles(
     scenes: list[dict],
     voice_starts: list[float],
@@ -210,15 +216,16 @@ def build_subtitles(
         seen_speakers.add(spk)
         style = pysubs2.SSAStyle()
         style.fontname     = "Arial"
-        style.fontsize     = 62
+        style.fontsize     = 86
         style.primarycolor = _parse_ass_color(
             SPEAKER_COLORS.get(spk, DEFAULT_COLOR)
         )
         style.bold         = True
-        style.outline      = 3
+        style.outline      = 4
+        style.outlinecolor = _parse_ass_color("&H00000000")   # black
         style.shadow       = 1
         style.alignment    = 2    # bottom-center
-        style.marginv      = 90
+        style.marginv      = int(TARGET_H * 0.20)  # bottom 20%
         subs.styles[spk]   = style
 
     for i, scene in enumerate(scenes):
@@ -229,7 +236,7 @@ def build_subtitles(
         subs.append(pysubs2.SSAEvent(
             start=start_ms,
             end=end_ms,
-            text=scene["text"],
+            text=_wrap_text(scene["text"]),
             style=spk,
         ))
 
