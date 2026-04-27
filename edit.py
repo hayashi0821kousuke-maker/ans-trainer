@@ -24,7 +24,7 @@ import pysubs2
 from dotenv import load_dotenv
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-MAX_DURATION   = 60.0   # YouTube Shorts hard cap (seconds)
+MAX_DURATION   = 45.0   # YouTube Shorts hard cap (seconds)
 SPEED_LIMIT    = 0.15   # clip speed adjustment cap (±15%)
 BGM_DUCK       = 0.3    # BGM volume during narration
 BGM_FULL       = 0.8    # BGM volume otherwise
