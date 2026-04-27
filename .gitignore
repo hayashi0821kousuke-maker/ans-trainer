@@ -3,3 +3,18 @@ dist
 dist-ssr
 *.local
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Video editor
+.env
+project/clips/*.mp4
+project/voice/*.mp3
+project/template/*.mp4
+project/output/
+project/sfx_cache/
+project/bgm_cache/
