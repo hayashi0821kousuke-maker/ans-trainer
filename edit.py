@@ -190,6 +190,12 @@ def _parse_ass_color(s: str) -> pysubs2.Color:
     return pysubs2.Color(r=r, g=g, b=b, a=a)
 
 
+def _wrap_text(text: str, max_chars: int = 15) -> str:
+    """Insert ASS hard line-breaks every max_chars characters."""
+    chunks = [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
+    return r"\N".join(chunks)
+
+
 def build_subtitles(
     scenes: list[dict],
     voice_starts: list[float],
@@ -219,7 +225,7 @@ def build_subtitles(
         style.outlinecolor = _parse_ass_color("&H00000000")   # black
         style.shadow       = 1
         style.alignment    = 2    # bottom-center
-        style.marginv      = 90
+        style.marginv      = int(TARGET_H * 0.20)  # bottom 20%
         subs.styles[spk]   = style
 
     for i, scene in enumerate(scenes):
@@ -230,7 +236,7 @@ def build_subtitles(
         subs.append(pysubs2.SSAEvent(
             start=start_ms,
             end=end_ms,
-            text=scene["text"],
+            text=_wrap_text(scene["text"]),
             style=spk,
         ))
 
