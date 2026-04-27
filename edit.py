@@ -11,6 +11,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,9 @@ BGM_FULL       = 0.8    # BGM volume otherwise
 SFX_VOL        = 0.8    # SFX gain in the mix
 TARGET_W       = 1080   # YouTube Shorts width
 TARGET_H       = 1920   # YouTube Shorts height
+TELOP_FONTSIZE = 86
+EMPHASIS_SCALE = 1.3
+EMPHASIS_COLOR = "&H000000FF"  # red in ASS &HAABBGGRR
 
 # ASS color format: &HAABBGGRR  (A=alpha, B=blue, G=green, R=red)
 SPEAKER_COLORS: dict[str, str] = {
@@ -191,9 +195,36 @@ def _parse_ass_color(s: str) -> pysubs2.Color:
 
 
 def _wrap_text(text: str, max_chars: int = 15) -> str:
-    """Insert ASS hard line-breaks every max_chars characters."""
-    chunks = [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
-    return r"\N".join(chunks)
+    """Wrap at max_chars visible chars; never breaks inside *...* emphasis spans."""
+    lines: list[str] = []
+    current: list[str] = []
+    visible = 0
+    in_emph = False
+    for ch in text:
+        if ch == "*":
+            in_emph = not in_emph
+            current.append(ch)
+            continue
+        if not in_emph and visible >= max_chars:
+            lines.append("".join(current))
+            current = []
+            visible = 0
+        current.append(ch)
+        visible += 1
+    if current:
+        lines.append("".join(current))
+    return r"\N".join(lines)
+
+
+def _apply_emphasis(text: str) -> str:
+    """Convert *word* markup to ASS inline tags (1.3x size, red, reset after)."""
+    emph_size = round(TELOP_FONTSIZE * EMPHASIS_SCALE)
+    color = EMPHASIS_COLOR.lstrip("&H")
+    return re.sub(
+        r"\*([^*\n]+)\*",
+        lambda m: rf"{{\fs{emph_size}\1c&H{color}&}}{m.group(1)}{{\r}}",
+        text,
+    )
 
 
 def build_subtitles(
@@ -216,7 +247,7 @@ def build_subtitles(
         seen_speakers.add(spk)
         style = pysubs2.SSAStyle()
         style.fontname     = "Arial"
-        style.fontsize     = 86
+        style.fontsize     = TELOP_FONTSIZE
         style.primarycolor = _parse_ass_color(
             SPEAKER_COLORS.get(spk, DEFAULT_COLOR)
         )
@@ -236,7 +267,7 @@ def build_subtitles(
         subs.append(pysubs2.SSAEvent(
             start=start_ms,
             end=end_ms,
-            text=_wrap_text(scene["text"]),
+            text=_apply_emphasis(_wrap_text(scene["text"])),
             style=spk,
         ))
 
