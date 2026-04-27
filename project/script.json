@@ -1,0 +1,22 @@
+{
+  "scenes": [
+    {
+      "clip": "clip_01.mp4",
+      "voice": "narrator",
+      "text": "今日も猫シェフが料理を始めます",
+      "sfx": "intro"
+    },
+    {
+      "clip": "clip_02.mp4",
+      "voice": "cat",
+      "text": "ニャー！完璧な一品ができたよ",
+      "sfx": "whoosh"
+    },
+    {
+      "clip": "clip_03.mp4",
+      "voice": "customer",
+      "text": "これは美味しすぎる！",
+      "sfx": "pop"
+    }
+  ]
+}
