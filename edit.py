@@ -181,6 +181,37 @@ def adjust_clip(src: Path, target_dur: float, out: Path) -> None:
        desc=f"speed-adjust {src.name}")
 
 
+# ─── Clip stabilization ───────────────────────────────────────────────────────
+
+def stabilize_clip(src: Path, idx: int, tmp_dir: Path) -> Path:
+    """
+    Two-pass vidstab stabilization.
+    Pass 1: vidstabdetect analyses motion into a .trf file.
+    Pass 2: vidstabtransform applies smoothing=10 (medium), keeps zoom/pan.
+    interpol=bicubic reduces edge blur on character outlines.
+    optzoom=1 auto-zooms to eliminate black borders without per-frame cropping.
+    """
+    trf  = tmp_dir / f"stab_{idx:02d}.trf"
+    out  = tmp_dir / f"clip_stab_{idx:02d}.mp4"
+
+    ff("-i", str(src),
+       "-vf", f"vidstabdetect=shakiness=5:accuracy=9:result={trf}",
+       "-f", "null", "-",
+       desc=f"vidstabdetect {src.name}")
+
+    ff("-i", str(src),
+       "-vf", (
+           f"vidstabtransform=input={trf}:smoothing=10"
+           f":optzoom=1:interpol=bicubic"
+       ),
+       "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+       "-c:a", "copy",
+       str(out),
+       desc=f"vidstabtransform {src.name}")
+
+    return out
+
+
 # ─── Subtitle generation ──────────────────────────────────────────────────────
 
 def _parse_ass_color(s: str) -> pysubs2.Color:
@@ -419,16 +450,17 @@ def build_main_content(
     total_voice  = duration(voice_merged)
     print(f"      Total voice duration: {total_voice:.2f}s")
 
-    # ── 2. Speed-adjust each clip to its scene's voice duration ───────────
-    print("\n[2/6] Speed-adjusting clips …")
+    # ── 2. Stabilize then speed-adjust each clip ──────────────────────────
+    print("\n[2/6] Stabilizing and speed-adjusting clips …")
     adj_clips: list[Path] = []
     for i, scene in enumerate(scenes):
         src = clips_dir / scene["clip"]
         if not src.exists():
             raise FileNotFoundError(f"Clip not found: {src}")
+        stab = stabilize_clip(src, i, tmp_dir)
         scene_voice_dur = duration(voice_dir / f"{scene['voice']}.mp3")
         adj = tmp_dir / f"clip_adj_{i:02d}.mp4"
-        adjust_clip(src, scene_voice_dur, adj)
+        adjust_clip(stab, scene_voice_dur, adj)
         adj_clips.append(adj)
 
     # ── 3. Concatenate adjusted clips ─────────────────────────────────────
