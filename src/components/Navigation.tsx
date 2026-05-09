@@ -1,4 +1,4 @@
-import { Dumbbell, Wrench, Activity, CalendarDays, Film } from 'lucide-react';
+import { Dumbbell, Wrench, Activity, CalendarDays, Film, Store } from 'lucide-react';
 import type { TabType } from '../types';
 
 interface Props {
@@ -12,6 +12,7 @@ const TABS: { id: TabType; label: string; Icon: React.FC<{ size: number }> }[] =
   { id: 'inbody', label: 'InBody', Icon: Activity },
   { id: 'history', label: '履歴', Icon: CalendarDays },
   { id: 'video', label: '動画', Icon: Film },
+  { id: 'store', label: '店舗', Icon: Store },
 ];
 
 export default function Navigation({ activeTab, onTabChange }: Props) {

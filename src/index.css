@@ -416,7 +416,7 @@ button:active {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   align-items: center;
   z-index: 50;
   padding-bottom: var(--safe-bottom);
@@ -1202,3 +1202,396 @@ button:active {
   transition: background 0.15s;
 }
 .btn-danger-sm:hover { background: rgba(248, 113, 113, 0.1); }
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – Shared layout
+══════════════════════════════════════════════════════════ */
+.store-section {
+  padding: 0 0 24px;
+}
+
+.store-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+}
+
+.store-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.week-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.week-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fab-sm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.fab-sm:hover { background: var(--accent-hover); }
+.fab-sm.secondary {
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.fab-sm.secondary:hover { background: var(--bg-card); }
+
+.form-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – KPI Dashboard
+══════════════════════════════════════════════════════════ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.kpi-unit {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.kpi-vs {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.kpi-target-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.progress-track {
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.progress-fill--good { background: var(--success); }
+.progress-fill--warn { background: var(--warning); }
+.progress-fill--bad  { background: var(--danger); }
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – Staff roles
+══════════════════════════════════════════════════════════ */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.role-badge--seishain { background: var(--accent-dim); color: var(--accent); }
+.role-badge--arbeit   { background: rgba(251,191,36,0.15); color: var(--warning); }
+.role-badge--part     { background: rgba(74,222,128,0.12); color: var(--success); }
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – Shift Requests
+══════════════════════════════════════════════════════════ */
+.shift-day-group {
+  margin: 0 16px 12px;
+}
+
+.shift-day-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 6px 0 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.time-badge {
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Paste import preview */
+.import-preview {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.import-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--warning);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.import-count {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.import-row-preview {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.import-row-name { font-weight: 600; color: var(--text-primary); min-width: 60px; }
+.import-row-date { min-width: 40px; }
+.import-row-time { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – Shift Calendar grid
+══════════════════════════════════════════════════════════ */
+.shift-calendar-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px 16px;
+}
+
+.shift-calendar-grid {
+  display: grid;
+  gap: 2px;
+  min-width: 460px;
+}
+
+.shift-cal-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 6px 2px;
+  background: var(--bg-card-hover);
+  border-radius: 6px;
+  line-height: 1.3;
+}
+
+.shift-cal-header--alert {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.shift-cal-staff-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 4px 2px;
+  display: flex;
+  align-items: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 64px;
+}
+
+.shift-cal-cell {
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+}
+
+/* Shift block variants */
+.shift-block {
+  border-radius: 5px;
+  padding: 3px 4px;
+  font-size: 9px;
+  line-height: 1.3;
+  border: 1px solid transparent;
+}
+
+.shift-block--normal {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shift-block--trimmed {
+  background: rgba(251,191,36,0.12);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.shift-block--unconfirmed {
+  background: rgba(144,144,176,0.08);
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+.shift-time { font-weight: 600; }
+
+.shift-trim-indicator {
+  font-size: 8px;
+  opacity: 0.8;
+  text-decoration: line-through;
+}
+
+.shift-cost-summary {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.shift-legend {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 8px;
+  flex-wrap: wrap;
+}
+
+.understaffed-banner {
+  background: rgba(248,113,113,0.10);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Store Manager – AutoGen
+══════════════════════════════════════════════════════════ */
+.hour-dist-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hour-dist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hour-dist-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 38px;
+  text-align: right;
+}
+
+.gen-result {
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 16px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gen-result--ok  { background: rgba(74,222,128,0.08); border: 1px solid var(--success); color: var(--success); }
+.gen-result--warn{ background: rgba(251,191,36,0.08); border: 1px solid var(--warning); color: var(--warning); }
+
+.gen-result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   Print styles
+══════════════════════════════════════════════════════════ */
+@media print {
+  .bottom-nav,
+  .fab,
+  .fab-sm,
+  .shift-print-hide { display: none !important; }
+
+  body { background: #fff !important; color: #000 !important; }
+  .app { max-width: 100% !important; }
+  .main-content { padding-bottom: 0 !important; overflow: visible !important; }
+
+  .shift-calendar-wrap { overflow: visible !important; }
+  .shift-calendar-grid { min-width: unset !important; }
+
+  .shift-block--trimmed {
+    text-decoration: none !important;
+    color: #333 !important;
+    border-color: #999 !important;
+    background: #f5f5f5 !important;
+  }
+  .shift-trim-indicator { display: none !important; }
+  .shift-block--unconfirmed { display: none !important; }
+
+  .kpi-card { border: 1px solid #ccc !important; background: #fff !important; }
+  .kpi-value { color: #000 !important; }
+}

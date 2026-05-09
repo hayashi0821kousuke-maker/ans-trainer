@@ -6,6 +6,7 @@ import Equipment from './components/Equipment';
 import InBodyProfile from './components/InBodyProfile';
 import TrainingHistory from './components/TrainingHistory';
 import VideoEditor from './components/VideoEditor';
+import StoreManager from './components/store/StoreManager';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('training');
@@ -18,6 +19,7 @@ export default function App() {
         {activeTab === 'inbody' && <InBodyProfile />}
         {activeTab === 'history' && <TrainingHistory />}
         {activeTab === 'video' && <VideoEditor />}
+        {activeTab === 'store' && <StoreManager />}
       </main>
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
