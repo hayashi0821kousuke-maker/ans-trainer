@@ -48,7 +48,74 @@ export interface SessionSet {
   reps: number;
 }
 
-export type TabType = 'training' | 'equipment' | 'inbody' | 'history' | 'video';
+export type TabType = 'training' | 'equipment' | 'inbody' | 'history' | 'video' | 'store';
+
+// ─── Store Manager ────────────────────────────────────────────────────────────
+
+export type StaffRole = '正社員' | 'アルバイト' | 'パート';
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  hourlyWage: number;
+  role: StaffRole;
+}
+
+export interface ShiftRequest {
+  id: string;
+  staffId: string;
+  weekStartDate: string; // ISO "YYYY-MM-DD" (Monday)
+  date: string;          // ISO "YYYY-MM-DD"
+  startTime: string;     // "HH:MM"
+  endTime: string;       // "HH:MM"
+}
+
+export interface AssignedShift {
+  id: string;
+  staffId: string;
+  weekStartDate: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  requestedStartTime: string;
+  requestedEndTime: string;
+  trimmed: boolean;
+  confirmed: boolean;
+}
+
+export interface HourlyDistribution {
+  hour: number;   // 0-23
+  weight: number; // relative weight 0-100
+}
+
+export interface WeekPlan {
+  id: string;
+  weekStartDate: string;
+  targetSales: number;
+  targetLaborCostRatio: number; // e.g. 0.30
+  minStaffPerSlot: number;
+  hourlyDistribution: HourlyDistribution[];
+  generatedAt?: string;
+}
+
+export interface DailyRecord {
+  id: string;
+  date: string;        // "YYYY-MM-DD"
+  sales: number;       // 売上 (yen)
+  customerCount: number;
+  foodCost: number;    // 食材費 (yen)
+}
+
+export interface MonthlyTarget {
+  yearMonth: string;           // "YYYY-MM"
+  targetSales: number;
+  targetFLRatio: number;       // e.g. 0.55
+  targetFoodCostRatio: number;
+  targetLaborCostRatio: number;
+}
+
+export type StoreSubTab = 'dashboard' | 'shift';
+export type ShiftSubTab = 'staff' | 'requests' | 'calendar' | 'autogen';
 
 export interface TelopStyle {
   fontSize: number;
