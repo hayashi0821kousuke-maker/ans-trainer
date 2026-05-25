@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-YouTube Shorts 動画自動生成スクリプト（VoiceVox音声生成対応）
+YouTube Shorts 動画自動生成スクリプト（VoiceVox / gTTS 音声生成対応）
 GASで生成した画像・台本・設定ファイルから動画を全自動生成します
 
 使い方:
     python make_video.py --project ./プロジェクトフォルダ/
-    python make_video.py --project ./プロジェクトフォルダ/ --speaker 1
-    python make_video.py --project ./プロジェクトフォルダ/ --no-bgm
+    python make_video.py --project ./プロジェクトフォルダ/ --tts gtts
+    python make_video.py --project ./プロジェクトフォルダ/ --speaker 1 --no-bgm
+
+TTSエンジン（--ttsで指定）:
+    auto     = VoiceVoxが起動していれば使用、なければgTTS（デフォルト）
+    voicevox = VoiceVoxのみ（ローカルサーバー必要）
+    gtts     = Google TTS（インターネット接続のみ・Colab推奨）
 
 VoiceVoxのキャラクターID（--speakerで指定）:
     1  = ずんだもん（ノーマル）
@@ -26,12 +31,18 @@ import sys
 import tempfile
 from pathlib import Path
 
-# requestsが入っていない場合は自動インストール
-try:
-    import requests
-except ImportError:
-    subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
-    import requests
+# 依存ライブラリを自動インストール
+def _ensure_pkg(pkg_import: str, pip_name: str):
+    try:
+        __import__(pkg_import)
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", pip_name, "-q"], check=True)
+
+_ensure_pkg("requests", "requests")
+_ensure_pkg("gtts",     "gtts")
+
+import requests
+from gtts import gTTS
 
 # ─── 定数 ─────────────────────────────────────────────────────────────────────
 
@@ -40,8 +51,9 @@ TARGET_H      = 1920
 FPS           = 30
 BGM_DUCK      = 0.25
 BGM_FULL      = 0.7
-VOICEVOX_URL  = "http://localhost:50021"
-DEFAULT_SPEAKER = 1  # ずんだもん
+VOICEVOX_URL    = "http://localhost:50021"
+DEFAULT_SPEAKER = 1   # ずんだもん
+DEFAULT_TTS     = "auto"
 
 # ─── FFmpegヘルパー ────────────────────────────────────────────────────────────
 
@@ -123,6 +135,25 @@ def voicevox_tts(text: str, speaker_id: int, output: Path) -> bool:
         print(f"  ⚠ VoiceVox エラー: {e}")
         return False
 
+def gtts_tts(text: str, output: Path) -> bool:
+    """gTTS（Google TTS）でテキストを音声変換してWAVで保存"""
+    clean = clean_script_text(text)
+    if not clean or len(clean) < 2:
+        return False
+    try:
+        mp3_path = output.with_suffix(".mp3")
+        tts = gTTS(text=clean, lang="ja")
+        tts.save(str(mp3_path))
+        ff("-i", str(mp3_path),
+           "-ar", "44100", "-ac", "1",
+           str(output),
+           desc=f"gTTS MP3→WAV: {output.name}")
+        mp3_path.unlink(missing_ok=True)
+        return True
+    except Exception as e:
+        print(f"  ⚠ gTTS エラー: {e}")
+        return False
+
 def generate_silence(duration: float, output: Path) -> None:
     """指定秒数の無音WAVを生成"""
     ff("-f", "lavfi",
@@ -137,25 +168,32 @@ def generate_voice_from_script(
     scenes: list,
     speaker_id: int,
     output: Path,
-    tmp_dir: Path
+    tmp_dir: Path,
+    tts_engine: str = "auto",
 ) -> bool:
-    """台本ファイルから全シーン分の音声を生成して結合"""
+    """台本ファイルから全シーン分の音声を生成して結合
 
-    if not check_voicevox():
-        print("\n" + "="*55)
-        print("  ⚠ VoiceVoxが起動していません")
-        print()
-        print("  【起動方法】")
-        print("  1. VoiceVoxアプリを開く")
-        print("  2. そのまま待つ（バックグラウンドでサーバーが起動）")
-        print("  3. このスクリプトを再実行")
-        print()
-        print("  VoiceVox未インストールの場合:")
-        print("  https://voicevox.hiroshiba.jp/ からダウンロード")
-        print("="*55 + "\n")
-        return False
+    tts_engine: 'voicevox' | 'gtts' | 'auto'
+        auto = VoiceVox起動中なら使用、なければgTTSにフォールバック
+    """
 
-    print(f"  VoiceVox 起動確認 OK（キャラクターID: {speaker_id}）")
+    use_voicevox = False
+    if tts_engine in ("voicevox", "auto"):
+        if check_voicevox():
+            use_voicevox = True
+            print(f"  TTS: VoiceVox（キャラクターID: {speaker_id}）")
+        elif tts_engine == "voicevox":
+            print("\n" + "="*55)
+            print("  ⚠ VoiceVoxが起動していません")
+            print("  1. VoiceVoxアプリを開く")
+            print("  2. このスクリプトを再実行")
+            print("="*55 + "\n")
+            return False
+        else:
+            print("  TTS: VoiceVox未起動 → gTTSにフォールバック")
+
+    if not use_voicevox:
+        print("  TTS: gTTS（Google Text-to-Speech）")
 
     # 台本を読み込む
     if not script_path.exists():
@@ -189,7 +227,10 @@ def generate_voice_from_script(
         # [間X.X]タグで無音を挿入
         pause_dur = extract_pause_duration(text)
 
-        ok = voicevox_tts(text, speaker_id, scene_wav)
+        if use_voicevox:
+            ok = voicevox_tts(text, speaker_id, scene_wav)
+        else:
+            ok = gtts_tts(text, scene_wav)
         if ok:
             wav_parts.append(scene_wav)
             print(f"    ✓ シーン{i+1} 音声生成完了")
@@ -324,7 +365,12 @@ def _wrap(text: str, n: int = 14) -> str:
 
 # ─── メインパイプライン ────────────────────────────────────────────────────────
 
-def build_video(project_dir: Path, speaker_id: int = DEFAULT_SPEAKER, no_bgm: bool = False) -> Path:
+def build_video(
+    project_dir: Path,
+    speaker_id:  int  = DEFAULT_SPEAKER,
+    no_bgm:      bool = False,
+    tts_engine:  str  = DEFAULT_TTS,
+) -> Path:
     config_path = project_dir / "production_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"production_config.json が見つかりません: {config_path}")
@@ -349,11 +395,11 @@ def build_video(project_dir: Path, speaker_id: int = DEFAULT_SPEAKER, no_bgm: bo
     with tempfile.TemporaryDirectory(prefix="yt_shorts_") as tmp:
         tmp_dir = Path(tmp)
 
-        # ── 1. VoiceVoxで音声を自動生成 ──────────────────────────────────────
-        print("[1/4] VoiceVoxで音声を生成中...")
+        # ── 1. 音声を自動生成 ─────────────────────────────────────────────────
+        print(f"[1/4] 音声を生成中（TTS: {tts_engine}）...")
         voice_path  = tmp_dir / "voice.aac"
         voice_ready = generate_voice_from_script(
-            script_path, scenes, speaker_id, voice_path, tmp_dir
+            script_path, scenes, speaker_id, voice_path, tmp_dir, tts_engine
         )
         if not voice_ready:
             print("  → 音声なしで動画を生成します")
@@ -444,6 +490,9 @@ def build_video(project_dir: Path, speaker_id: int = DEFAULT_SPEAKER, no_bgm: bo
 def main():
     parser = argparse.ArgumentParser(description="YouTube Shorts 動画自動生成")
     parser.add_argument("--project",  required=True, help="プロジェクトフォルダのパス")
+    parser.add_argument("--tts",      default=DEFAULT_TTS,
+                        choices=["auto", "voicevox", "gtts"],
+                        help="TTSエンジン（auto=自動判定, voicevox, gtts）")
     parser.add_argument("--speaker",  type=int, default=DEFAULT_SPEAKER,
                         help="VoiceVoxキャラクターID（デフォルト: 1=ずんだもん）")
     parser.add_argument("--no-bgm",  action="store_true", help="BGMを使用しない")
@@ -453,6 +502,7 @@ def main():
         project_dir = Path(args.project).resolve(),
         speaker_id  = args.speaker,
         no_bgm      = args.no_bgm,
+        tts_engine  = args.tts,
     )
 
 if __name__ == "__main__":
