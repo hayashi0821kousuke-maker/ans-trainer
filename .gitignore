@@ -10,6 +10,13 @@ __pycache__/
 .venv/
 venv/
 
+# Bot tokens and secrets
+.tokens/
+client_secrets.json
+*.pickle
+yt_save_token.py
+YouTube_Shorts_ワンクリック生成.ipynb.bak
+
 # Video editor
 .env
 project/clips/*.mp4
